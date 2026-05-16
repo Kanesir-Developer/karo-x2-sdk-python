@@ -1,0 +1,89 @@
+[build-system]
+requires = ["setuptools>=64", "wheel", "protobuf>=7.34.1,<8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# PyPI 分发名 = `karo-x2-sdk`; Python import 路径 = `karo_x2_sdk` (下划线).
+# v3.2.7 起 dist 名和 import 名完全对齐 (前序版本 import 路径还是 karo_sdk).
+# 多机型 (X3/X4...) 出 SDK 时按 karo-{model}-sdk[-{lang}] 命名约定起独立分发,
+# 客户机器上多 SDK 共存不冲突 (见 memory karo_sdk_naming_convention.md).
+# 用法: pip install karo-x2-sdk → from karo_x2_sdk import Robot
+name = "karo-x2-sdk"
+version = "3.2.15"
+description = "Karo X2 robot third-party Python SDK"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+  { name = "Kanesir Robotics", email = "sdk@kanesir.com" },
+]
+keywords = ["robotics", "karo", "sdk", "websocket"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+  # websockets: 主流 WSS 库, 异步 IO, 支持 SSL context.
+  # 12-13 用 ``.closed`` 属性, 14+ 改 ``.state``; ws_client 用 _is_ws_closed
+  # helper 兼容两套. 上限 <17 为预留 (大版本破坏防护, 不锁死客户升级).
+  "websockets>=12.0,<17",
+  # protobuf: 官方 google.protobuf, 与 C++ SDK 共用 wire format.
+  # 下界 = generated _pb2.py 的 protoc 7.34.1 序列化格式要求; <8 防大版本破坏.
+  "protobuf>=7.34.1,<8",
+  # cryptography: PEM → DER 转换 (X.509 证书, handshake 用).
+  "cryptography>=42.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.23",
+  # 静态检查.
+  "ruff>=0.6",
+  # 注: protoc 生成 _pb2.py 走系统 protoc 命令 (scripts/gen_proto.sh),
+  # 不需要 grpcio-tools (Python wheel). 老版本 dev 加了它但与 protobuf>=7.34
+  # 冲突 (grpcio-tools<1.65 pin protobuf<6), 实际从未被 import → 删掉.
+]
+# Release 工具链 (打包 + 上传). 单独 extra 不污染日常开发安装体积;
+# 客户用 pip install karo-x2-sdk 不需要装这些.
+release = [
+  "build>=1.2",
+  "twine>=5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Kanesir-Developer/karo-x2-sdk-python"
+Documentation = "https://kanesir-developer.github.io/karo-x2-sdk-python/"
+Repository = "https://github.com/Kanesir-Developer/karo-x2-sdk-python"
+Issues = "https://github.com/Kanesir-Developer/karo-x2-sdk-python/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["karo_x2_sdk*"]
+
+[tool.setuptools.package-data]
+"karo_x2_sdk._internal.proto_gen" = ["*.py", "**/*.py"]
+
+# Ruff: 排除生成的 proto _pb2.py — 它们的 import 看似 unused 但 protobuf
+# descriptor pool 必须 side-effect 加载依赖 (sdk/session.proto import karo/v1/rpc.proto
+# → session_pb2.py 必须 import rpc_pb2 让 rpc 先注册进 pool, 否则 collection 期
+# TypeError "Depends on file karo/v1/rpc.proto, but it has not been loaded").
+# ruff --fix 不能识别这种侧效语义.
+[tool.ruff]
+extend-exclude = [
+  "karo_x2_sdk/_internal/proto_gen",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
